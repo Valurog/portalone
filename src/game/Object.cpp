@@ -41,6 +41,7 @@
 #include "ObjectPosSelector.h"
 #include "TemporarySummon.h"
 #include "movement/packet_builder.h"
+#include "CreatureLinkingMgr.h"
 
 Object::Object()
 {
@@ -48,7 +49,7 @@ Object::Object()
     m_objectType        = TYPEMASK_OBJECT;
 
     m_uint32Values      = 0;
-    m_uint32Values_mirror = 0;
+    m_changedFields     = 0;
     m_valuesCount       = 0;
 
     m_inWorld           = false;
@@ -71,7 +72,7 @@ Object::~Object()
     }
 
     delete[] m_uint32Values;
-    delete[] m_uint32Values_mirror;
+    delete[] m_changedFields;
 }
 
 void Object::_InitValues()
@@ -79,8 +80,8 @@ void Object::_InitValues()
     m_uint32Values = new uint32[ m_valuesCount ];
     memset(m_uint32Values, 0, m_valuesCount * sizeof(uint32));
 
-    m_uint32Values_mirror = new uint32[ m_valuesCount ];
-    memset(m_uint32Values_mirror, 0, m_valuesCount * sizeof(uint32));
+    m_changedFields = new bool[ m_valuesCount ];
+    memset(m_changedFields, 0, m_valuesCount * sizeof(bool));
 
     m_objectUpdated = false;
 }
@@ -521,6 +522,14 @@ void Object::BuildValuesUpdate(uint8 updatetype, ByteBuffer* data, UpdateMask* u
                     else
                         *data << uint32(0);                 // disable quest object
                 }
+                // hide RAF flag if need
+                else if (index == UNIT_DYNAMIC_FLAGS && GetTypeId() == TYPEID_PLAYER)
+                {
+                    if (!((Player*)this)->IsReferAFriendLinked(target))
+                        *data << (m_uint32Values[index] & ~UNIT_DYNFLAG_REFER_A_FRIEND);
+                    else
+                        *data << m_uint32Values[index];
+                }
                 else
                     *data << m_uint32Values[index];         // other cases
             }
@@ -545,8 +554,8 @@ void Object::ClearUpdateMask(bool remove)
     {
         for (uint16 index = 0; index < m_valuesCount; ++index)
         {
-            if (m_uint32Values_mirror[index] != m_uint32Values[index])
-                m_uint32Values_mirror[index] = m_uint32Values[index];
+            if (m_changedFields[index])
+                m_changedFields[index] = false;
         }
     }
 
@@ -581,7 +590,7 @@ void Object::_SetUpdateBits(UpdateMask* updateMask, Player* /*target*/) const
 {
     for (uint16 index = 0; index < m_valuesCount; ++index)
     {
-        if (m_uint32Values_mirror[index] != m_uint32Values[index])
+        if (m_changedFields[index])
             updateMask->SetBit(index);
     }
 }
@@ -602,6 +611,7 @@ void Object::SetInt32Value(uint16 index, int32 value)
     if (m_int32Values[ index ] != value)
     {
         m_int32Values[ index ] = value;
+        m_changedFields[ index ] = true;
         MarkForClientUpdate();
     }
 }
@@ -613,6 +623,7 @@ void Object::SetUInt32Value(uint16 index, uint32 value)
     if (m_uint32Values[ index ] != value)
     {
         m_uint32Values[ index ] = value;
+        m_changedFields[ index ] = true;
         MarkForClientUpdate();
     }
 }
@@ -620,10 +631,12 @@ void Object::SetUInt32Value(uint16 index, uint32 value)
 void Object::SetUInt64Value(uint16 index, const uint64& value)
 {
     MANGOS_ASSERT(index + 1 < m_valuesCount || PrintIndexError(index, true));
-    if (*((uint64*)&(m_uint32Values[ index ])) != value)
+    if (*((uint64*) & (m_uint32Values[ index ])) != value)
     {
         m_uint32Values[ index ] = *((uint32*)&value);
         m_uint32Values[ index + 1 ] = *(((uint32*)&value) + 1);
+        m_changedFields[ index ] = true;
+        m_changedFields[ index + 1 ] = true;
         MarkForClientUpdate();
     }
 }
@@ -635,6 +648,7 @@ void Object::SetFloatValue(uint16 index, float value)
     if (m_floatValues[ index ] != value)
     {
         m_floatValues[ index ] = value;
+        m_changedFields[ index ] = true;
         MarkForClientUpdate();
     }
 }
@@ -653,6 +667,7 @@ void Object::SetByteValue(uint16 index, uint8 offset, uint8 value)
     {
         m_uint32Values[ index ] &= ~uint32(uint32(0xFF) << (offset * 8));
         m_uint32Values[ index ] |= uint32(uint32(value) << (offset * 8));
+        m_changedFields[ index ] = true;
         MarkForClientUpdate();
     }
 }
@@ -671,6 +686,7 @@ void Object::SetUInt16Value(uint16 index, uint8 offset, uint16 value)
     {
         m_uint32Values[ index ] &= ~uint32(uint32(0xFFFF) << (offset * 16));
         m_uint32Values[ index ] |= uint32(uint32(value) << (offset * 16));
+        m_changedFields[ index ] = true;
         MarkForClientUpdate();
     }
 }
@@ -732,6 +748,7 @@ void Object::SetFlag(uint16 index, uint32 newFlag)
     if (oldval != newval)
     {
         m_uint32Values[ index ] = newval;
+        m_changedFields[ index ] = true;
         MarkForClientUpdate();
     }
 }
@@ -745,6 +762,7 @@ void Object::RemoveFlag(uint16 index, uint32 oldFlag)
     if (oldval != newval)
     {
         m_uint32Values[ index ] = newval;
+        m_changedFields[ index ] = true;
         MarkForClientUpdate();
     }
 }
@@ -762,6 +780,7 @@ void Object::SetByteFlag(uint16 index, uint8 offset, uint8 newFlag)
     if (!(uint8(m_uint32Values[ index ] >> (offset * 8)) & newFlag))
     {
         m_uint32Values[ index ] |= uint32(uint32(newFlag) << (offset * 8));
+        m_changedFields[ index ] = true;
         MarkForClientUpdate();
     }
 }
@@ -779,6 +798,7 @@ void Object::RemoveByteFlag(uint16 index, uint8 offset, uint8 oldFlag)
     if (uint8(m_uint32Values[ index ] >> (offset * 8)) & oldFlag)
     {
         m_uint32Values[ index ] &= ~uint32(uint32(oldFlag) << (offset * 8));
+        m_changedFields[ index ] = true;
         MarkForClientUpdate();
     }
 }
@@ -1328,22 +1348,22 @@ namespace MaNGOS
 {
     class MonsterChatBuilder
     {
-        public:
-            MonsterChatBuilder(WorldObject const& obj, ChatMsg msgtype, int32 textId, uint32 language, Unit* target)
-                : i_object(obj), i_msgtype(msgtype), i_textId(textId), i_language(language), i_target(target) {}
-            void operator()(WorldPacket& data, int32 loc_idx)
-            {
-                char const* text = sObjectMgr.GetMangosString(i_textId, loc_idx);
+    public:
+        MonsterChatBuilder(WorldObject const& obj, ChatMsg msgtype, int32 textId, uint32 language, Unit* target)
+            : i_object(obj), i_msgtype(msgtype), i_textId(textId), i_language(language), i_target(target) {}
+        void operator()(WorldPacket& data, int32 loc_idx)
+        {
+            char const* text = sObjectMgr.GetMangosString(i_textId, loc_idx);
 
-                WorldObject::BuildMonsterChat(&data, i_object.GetObjectGuid(), i_msgtype, text, i_language, i_object.GetNameForLocaleIdx(loc_idx), i_target ? i_target->GetObjectGuid() : ObjectGuid(), i_target ? i_target->GetNameForLocaleIdx(loc_idx) : "");
-            }
+            WorldObject::BuildMonsterChat(&data, i_object.GetObjectGuid(), i_msgtype, text, i_language, i_object.GetNameForLocaleIdx(loc_idx), i_target ? i_target->GetObjectGuid() : ObjectGuid(), i_target ? i_target->GetNameForLocaleIdx(loc_idx) : "");
+        }
 
-        private:
-            WorldObject const& i_object;
-            ChatMsg i_msgtype;
-            int32 i_textId;
-            uint32 i_language;
-            Unit* i_target;
+    private:
+        WorldObject const& i_object;
+        ChatMsg i_msgtype;
+        int32 i_textId;
+        uint32 i_language;
+        Unit* i_target;
     };
 }                                                           // namespace MaNGOS
 
@@ -1512,10 +1532,14 @@ Creature* WorldObject::SummonCreature(uint32 id, float x, float y, float z, floa
     // Active state set before added to map
     pCreature->SetActiveObjectState(asActiveObject);
 
-    pCreature->Summon(spwtype, despwtime);
+    pCreature->Summon(spwtype, despwtime);                  // Also initializes the AI and MMGen
 
     if (GetTypeId() == TYPEID_UNIT && ((Creature*)this)->AI())
         ((Creature*)this)->AI()->JustSummoned(pCreature);
+
+    // Creature Linking, Initial load is handled like respawn
+    if (pCreature->IsLinkingEventTrigger())
+        GetMap()->GetCreatureLinkingHolder()->DoCreatureLinkingEvent(LINKING_EVENT_RESPAWN, pCreature);
 
     // return the creature therewith the summoner has access to it
     return pCreature;
@@ -1525,75 +1549,75 @@ namespace MaNGOS
 {
     class NearUsedPosDo
     {
-        public:
-            NearUsedPosDo(WorldObject const& obj, WorldObject const* searcher, float absAngle, ObjectPosSelector& selector)
-                : i_object(obj), i_searcher(searcher), i_absAngle(MapManager::NormalizeOrientation(absAngle)), i_selector(selector) {}
+    public:
+        NearUsedPosDo(WorldObject const& obj, WorldObject const* searcher, float absAngle, ObjectPosSelector& selector)
+            : i_object(obj), i_searcher(searcher), i_absAngle(MapManager::NormalizeOrientation(absAngle)), i_selector(selector) {}
 
-            void operator()(Corpse*) const {}
-            void operator()(DynamicObject*) const {}
+        void operator()(Corpse*) const {}
+        void operator()(DynamicObject*) const {}
 
-            void operator()(Creature* c) const
+        void operator()(Creature* c) const
+        {
+            // skip self or target
+            if (c == i_searcher || c == &i_object)
+                return;
+
+            float x, y, z;
+
+            if (c->IsStopped() || !c->GetMotionMaster()->GetDestination(x, y, z))
             {
-                // skip self or target
-                if (c == i_searcher || c == &i_object)
-                    return;
-
-                float x, y, z;
-
-                if (c->IsStopped() || !c->GetMotionMaster()->GetDestination(x, y, z))
-                {
-                    x = c->GetPositionX();
-                    y = c->GetPositionY();
-                }
-
-                add(c, x, y);
+                x = c->GetPositionX();
+                y = c->GetPositionY();
             }
 
-            template<class T>
-            void operator()(T* u) const
-            {
-                // skip self or target
-                if (u == i_searcher || u == &i_object)
-                    return;
+            add(c, x, y);
+        }
 
-                float x, y;
+        template<class T>
+        void operator()(T* u) const
+        {
+            // skip self or target
+            if (u == i_searcher || u == &i_object)
+                return;
 
-                x = u->GetPositionX();
-                y = u->GetPositionY();
+            float x, y;
 
-                add(u, x, y);
-            }
+            x = u->GetPositionX();
+            y = u->GetPositionY();
 
-            // we must add used pos that can fill places around center
-            void add(WorldObject* u, float x, float y) const
-            {
-                // dist include size of u and i_object
-                float dx = i_object.GetPositionX() - x;
-                float dy = i_object.GetPositionY() - y;
-                float dist2d = sqrt((dx * dx) + (dy * dy));
+            add(u, x, y);
+        }
 
-                float delta = i_selector.m_searcherSize + u->GetObjectBoundingRadius();
+        // we must add used pos that can fill places around center
+        void add(WorldObject* u, float x, float y) const
+        {
+            // dist include size of u and i_object
+            float dx = i_object.GetPositionX() - x;
+            float dy = i_object.GetPositionY() - y;
+            float dist2d = sqrt((dx * dx) + (dy * dy));
 
-                // u is too nearest/far away to i_object
-                if (dist2d < i_selector.m_searcherDist - delta ||
-                        dist2d >= i_selector.m_searcherDist + delta)
-                    return;
+            float delta = i_selector.m_searcherSize + u->GetObjectBoundingRadius();
 
-                float angle = i_object.GetAngle(u) - i_absAngle;
+            // u is too nearest/far away to i_object
+            if (dist2d < i_selector.m_searcherDist - delta ||
+                dist2d >= i_selector.m_searcherDist + delta)
+                return;
 
-                // move angle to range -pi ... +pi, range before is -2Pi..2Pi
-                if (angle > M_PI_F)
-                    angle -= 2.0f * M_PI_F;
-                else if (angle < -M_PI_F)
-                    angle += 2.0f * M_PI_F;
+            float angle = i_object.GetAngle(u) - i_absAngle;
 
-                i_selector.AddUsedArea(u->GetObjectBoundingRadius(), angle, dist2d);
-            }
-        private:
-            WorldObject const& i_object;
-            WorldObject const* i_searcher;
-            float              i_absAngle;
-            ObjectPosSelector& i_selector;
+            // move angle to range -pi ... +pi, range before is -2Pi..2Pi
+            if (angle > M_PI_F)
+                angle -= 2.0f * M_PI_F;
+            else if (angle < -M_PI_F)
+                angle += 2.0f * M_PI_F;
+
+            i_selector.AddUsedArea(u->GetObjectBoundingRadius(), angle, dist2d);
+        }
+    private:
+        WorldObject const& i_object;
+        WorldObject const* i_searcher;
+        float              i_absAngle;
+        ObjectPosSelector& i_selector;
     };
 }                                                           // namespace MaNGOS
 

@@ -174,7 +174,7 @@ Creature::Creature(CreatureSubtype subtype) :
     m_CreatureSpellCooldowns.clear();
     m_CreatureCategoryCooldowns.clear();
 
-    SetWalk(true);
+    SetWalk(true, true);
 }
 
 Creature::~Creature()
@@ -325,7 +325,7 @@ bool Creature::InitEntry(uint32 Entry, CreatureData const* data /*=NULL*/, GameE
     UpdateSpeed(MOVE_WALK, false);
     UpdateSpeed(MOVE_RUN,  false);
 
-    SetLevitate(CanFly());
+    SetLevitate(cinfo->InhabitType & INHABIT_AIR);
 
     // checked at loading
     m_defaultMovementType = MovementGeneratorType(cinfo->MovementType);
@@ -748,15 +748,15 @@ bool Creature::Create(uint32 guidlow, CreatureCreatePos& cPos, CreatureInfo cons
     if (!cPos.Relocate(this))
         return false;
 
+    // Notify the outdoor pvp script
+    if (OutdoorPvP* outdoorPvP = sOutdoorPvPMgr.GetScript(GetZoneId()))
+        outdoorPvP->HandleCreatureCreate(this);
+
     // Notify the map's instance data.
     // Only works if you create the object in it, not if it is moves to that map.
     // Normally non-players do not teleport to other maps.
     if (InstanceData* iData = GetMap()->GetInstanceData())
         iData->OnCreatureCreate(this);
-
-    // Notify the outdoor pvp script
-    if (OutdoorPvP* outdoorPvP = sOutdoorPvPMgr.GetScript(GetZoneId()))
-        outdoorPvP->HandleCreatureCreate(this);
 
     switch (GetCreatureInfo()->rank)
     {
@@ -820,12 +820,12 @@ bool Creature::IsTrainerOf(Player* pPlayer, bool msg) const
                         case CLASS_DRUID:  pPlayer->PlayerTalkClass->SendGossipMenu(4913, GetObjectGuid()); break;
                         case CLASS_HUNTER: pPlayer->PlayerTalkClass->SendGossipMenu(10090, GetObjectGuid()); break;
                         case CLASS_MAGE:   pPlayer->PlayerTalkClass->SendGossipMenu(328, GetObjectGuid()); break;
-                        case CLASS_PALADIN:pPlayer->PlayerTalkClass->SendGossipMenu(1635, GetObjectGuid()); break;
+                        case CLASS_PALADIN: pPlayer->PlayerTalkClass->SendGossipMenu(1635, GetObjectGuid()); break;
                         case CLASS_PRIEST: pPlayer->PlayerTalkClass->SendGossipMenu(4436, GetObjectGuid()); break;
                         case CLASS_ROGUE:  pPlayer->PlayerTalkClass->SendGossipMenu(4797, GetObjectGuid()); break;
                         case CLASS_SHAMAN: pPlayer->PlayerTalkClass->SendGossipMenu(5003, GetObjectGuid()); break;
-                        case CLASS_WARLOCK:pPlayer->PlayerTalkClass->SendGossipMenu(5836, GetObjectGuid()); break;
-                        case CLASS_WARRIOR:pPlayer->PlayerTalkClass->SendGossipMenu(4985, GetObjectGuid()); break;
+                        case CLASS_WARLOCK: pPlayer->PlayerTalkClass->SendGossipMenu(5836, GetObjectGuid()); break;
+                        case CLASS_WARRIOR: pPlayer->PlayerTalkClass->SendGossipMenu(4985, GetObjectGuid()); break;
                     }
                 }
                 return false;
@@ -940,8 +940,8 @@ void Creature::PrepareBodyLootState()
         {
             // have normal loot
             if (GetCreatureInfo()->maxgold > 0 || GetCreatureInfo()->lootid ||
-                    // ... or can have skinning after
-                    (GetCreatureInfo()->SkinLootId && sWorld.getConfig(CONFIG_BOOL_CORPSE_EMPTY_LOOT_SHOW)))
+                // ... or can have skinning after
+                (GetCreatureInfo()->SkinLootId && sWorld.getConfig(CONFIG_BOOL_CORPSE_EMPTY_LOOT_SHOW)))
             {
                 SetFlag(UNIT_DYNAMIC_FLAGS, UNIT_DYNFLAG_LOOTABLE);
                 return;
@@ -1070,7 +1070,7 @@ void Creature::SaveToDB(uint32 mapid, uint8 spawnMask)
     if (cinfo)
     {
         if (displayId != cinfo->ModelId[0] && displayId != cinfo->ModelId[1] &&
-                displayId != cinfo->ModelId[2] && displayId != cinfo->ModelId[3])
+            displayId != cinfo->ModelId[2] && displayId != cinfo->ModelId[3])
         {
             for (int i = 0; i < MAX_CREATURE_MODEL && displayId; ++i)
                 if (cinfo->ModelId[i])
@@ -1519,7 +1519,7 @@ void Creature::SetDeathState(DeathState s)
 
         SetHealth(GetMaxHealth());
         SetLootRecipient(NULL);
-        SetWalk(true);
+        SetWalk(true, true);
 
         if (GetTemporaryFactionFlags() & TEMPFACTION_RESTORE_RESPAWN)
             ClearTemporaryFaction();
@@ -1632,9 +1632,9 @@ SpellEntry const* Creature::ReachWithSpellAttack(Unit* pVictim)
         for (int j = 0; j < MAX_EFFECT_INDEX; ++j)
         {
             if ((spellInfo->Effect[j] == SPELL_EFFECT_SCHOOL_DAMAGE)       ||
-                    (spellInfo->Effect[j] == SPELL_EFFECT_INSTAKILL)            ||
-                    (spellInfo->Effect[j] == SPELL_EFFECT_ENVIRONMENTAL_DAMAGE) ||
-                    (spellInfo->Effect[j] == SPELL_EFFECT_HEALTH_LEECH)
+                (spellInfo->Effect[j] == SPELL_EFFECT_INSTAKILL)            ||
+                (spellInfo->Effect[j] == SPELL_EFFECT_ENVIRONMENTAL_DAMAGE) ||
+                (spellInfo->Effect[j] == SPELL_EFFECT_HEALTH_LEECH)
                )
             {
                 bcontinue = false;
@@ -2079,7 +2079,7 @@ Unit* Creature::SelectAttackingTarget(AttackingTarget target, uint32 position, S
                         suitableUnits.push_back(pTarget);
 
             if (!suitableUnits.empty())
-                return suitableUnits[urand(0, suitableUnits.size()-1)];
+                return suitableUnits[urand(0, suitableUnits.size() - 1)];
 
             break;
         }
@@ -2528,12 +2528,25 @@ void Creature::SetVirtualItemRaw(VirtualItemSlot slot, uint32 display_id, uint32
     SetUInt32Value(UNIT_VIRTUAL_ITEM_INFO + (slot * 2) + 1, info1);
 }
 
-void Creature::SetWalk(bool enable)
+void Creature::SetWalk(bool enable, bool asDefault)
 {
+    if (asDefault)
+    {
+        if (enable)
+            clearUnitState(UNIT_STAT_RUNNING);
+        else
+            addUnitState(UNIT_STAT_RUNNING);
+    }
+
+    // Nothing changed?
+    if (enable == m_movementInfo.HasMovementFlag(MOVEFLAG_WALK_MODE))
+        return;
+
     if (enable)
         m_movementInfo.AddMovementFlag(MOVEFLAG_WALK_MODE);
     else
         m_movementInfo.RemoveMovementFlag(MOVEFLAG_WALK_MODE);
+
     WorldPacket data(enable ? SMSG_SPLINE_MOVE_SET_WALK_MODE : SMSG_SPLINE_MOVE_SET_RUN_MODE, 9);
     data << GetPackGUID();
     SendMessageToSet(&data, true);

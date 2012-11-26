@@ -219,8 +219,8 @@ void AuthSocket::OnRead()
         for (i = 0; i < AUTH_TOTAL_COMMANDS; ++i)
         {
             if ((uint8)table[i].cmd == _cmd &&
-                    (table[i].status == STATUS_CONNECTED ||
-                     (_authed && table[i].status == STATUS_AUTHED)))
+                (table[i].status == STATUS_CONNECTED ||
+                 (_authed && table[i].status == STATUS_AUTHED)))
             {
                 DEBUG_LOG("[Auth] got data for cmd %u recv length %u",
                           (uint32)_cmd, (uint32)recv_len());
@@ -360,6 +360,14 @@ bool AuthSocket::_HandleLogonChallenge()
     _login = (const char*)ch->I;
     _build = ch->build;
 
+    _os = (const char*)ch->os;
+
+    if (_os.size() > 4)
+        return false;
+
+    // Restore string order as its byte order is reversed
+    std::reverse(_os.begin(), _os.end());
+
     ///- Normalize account name
     // utf8ToUpperOnlyLatin(_login); -- client already send account in expected form
 
@@ -389,7 +397,7 @@ bool AuthSocket::_HandleLogonChallenge()
         ///- Get the account details from the account table
         // No SQL injection (escaped user name)
 
-        result = LoginDatabase.PQuery("SELECT sha_pass_hash,id,locked,last_ip,gmlevel,v,s FROM account WHERE username = '%s'",_safelogin.c_str());
+        result = LoginDatabase.PQuery("SELECT sha_pass_hash,id,locked,last_ip,gmlevel,v,s FROM account WHERE username = '%s'", _safelogin.c_str());
         if (result)
         {
             ///- If the IP is 'locked', check that the player comes indeed from the correct IP address
@@ -398,11 +406,11 @@ bool AuthSocket::_HandleLogonChallenge()
             {
                 DEBUG_LOG("[AuthChallenge] Account '%s' is locked to IP - '%s'", _login.c_str(), (*result)[3].GetString());
                 DEBUG_LOG("[AuthChallenge] Player address is '%s'", get_remote_address().c_str());
-                if (strcmp((*result)[3].GetString(),get_remote_address().c_str()))
+                if (strcmp((*result)[3].GetString(), get_remote_address().c_str()))
                 {
                     DEBUG_LOG("[AuthChallenge] Account IP differs");
                     pkt << (uint8) WOW_FAIL_SUSPENDED;
-                    locked=true;
+                    locked = true;
                 }
                 else
                 {
@@ -424,12 +432,12 @@ bool AuthSocket::_HandleLogonChallenge()
                     if ((*banresult)[0].GetUInt64() == (*banresult)[1].GetUInt64())
                     {
                         pkt << (uint8) WOW_FAIL_BANNED;
-                        BASIC_LOG("[AuthChallenge] Banned account %s tries to login!",_login.c_str());
+                        BASIC_LOG("[AuthChallenge] Banned account %s tries to login!", _login.c_str());
                     }
                     else
                     {
                         pkt << (uint8) WOW_FAIL_SUSPENDED;
-                        BASIC_LOG("[AuthChallenge] Temporarily banned account %s tries to login!",_login.c_str());
+                        BASIC_LOG("[AuthChallenge] Temporarily banned account %s tries to login!", _login.c_str());
                     }
 
                     delete banresult;
@@ -446,7 +454,7 @@ bool AuthSocket::_HandleLogonChallenge()
                     DEBUG_LOG("database authentication values: v='%s' s='%s'", databaseV.c_str(), databaseS.c_str());
 
                     // multiply with 2, bytes are stored as hexstring
-                    if (databaseV.size() != s_BYTE_SIZE*2 || databaseS.size() != s_BYTE_SIZE*2)
+                    if (databaseV.size() != s_BYTE_SIZE * 2 || databaseS.size() != s_BYTE_SIZE * 2)
                         _SetVSFields(rI);
                     else
                     {
@@ -502,7 +510,7 @@ bool AuthSocket::_HandleLogonChallenge()
 
                     _localizationName.resize(4);
                     for (int i = 0; i < 4; ++i)
-                        _localizationName[i] = ch->country[4-i-1];
+                        _localizationName[i] = ch->country[4 - i - 1];
 
                     BASIC_LOG("[AuthChallenge] account %s is using '%c%c%c%c' locale (%u)", _login.c_str(), ch->country[3], ch->country[2], ch->country[1], ch->country[0], GetLocaleByName(_localizationName));
                 }
@@ -511,7 +519,7 @@ bool AuthSocket::_HandleLogonChallenge()
         }
         else                                                // no account
         {
-            pkt<< (uint8) WOW_FAIL_UNKNOWN_ACCOUNT;
+            pkt << (uint8) WOW_FAIL_UNKNOWN_ACCOUNT;
         }
     }
     send((char const*)pkt.contents(), pkt.size());
@@ -672,7 +680,7 @@ bool AuthSocket::_HandleLogonProof()
         ///- Update the sessionkey, last_ip, last login time and reset number of failed logins in the account table for this account
         // No SQL injection (escaped user name) and IP address as received by socket
         const char* K_hex = K.AsHexStr();
-        LoginDatabase.PExecute("UPDATE account SET sessionkey = '%s', last_ip = '%s', last_login = NOW(), locale = '%u', failed_logins = 0 WHERE username = '%s'", K_hex, get_remote_address().c_str(), GetLocaleByName(_localizationName), _safelogin.c_str());
+        LoginDatabase.PExecute("UPDATE account SET sessionkey = '%s', last_ip = '%s', last_login = NOW(), locale = '%u', os = '%s', failed_logins = 0 WHERE username = '%s'", K_hex, get_remote_address().c_str(), GetLocaleByName(_localizationName), _os.c_str(), _safelogin.c_str());
         OPENSSL_free((void*)K_hex);
 
         ///- Finish SRP6 and send the final result to the client
@@ -698,13 +706,13 @@ bool AuthSocket::_HandleLogonProof()
             char data[2] = { CMD_AUTH_LOGON_PROOF, WOW_FAIL_UNKNOWN_ACCOUNT};
             send(data, sizeof(data));
         }
-        BASIC_LOG("[AuthChallenge] account %s tried to login with wrong password!",_login.c_str());
+        BASIC_LOG("[AuthChallenge] account %s tried to login with wrong password!", _login.c_str());
 
         uint32 MaxWrongPassCount = sConfig.GetIntDefault("WrongPass.MaxCount", 0);
         if (MaxWrongPassCount > 0)
         {
             // Increment number of failed logins by one and if it reaches the limit temporarily ban that account or IP
-            LoginDatabase.PExecute("UPDATE account SET failed_logins = failed_logins + 1 WHERE username = '%s'",_safelogin.c_str());
+            LoginDatabase.PExecute("UPDATE account SET failed_logins = failed_logins + 1 WHERE username = '%s'", _safelogin.c_str());
 
             if (QueryResult* loginfail = LoginDatabase.PQuery("SELECT id, failed_logins FROM account WHERE username = '%s'", _safelogin.c_str()))
             {
@@ -781,6 +789,14 @@ bool AuthSocket::_HandleReconnectChallenge()
 
     QueryResult* result = LoginDatabase.PQuery("SELECT sessionkey FROM account WHERE username = '%s'", _safelogin.c_str());
 
+    _os = (const char*)ch->os;
+
+    if(_os.size() > 4)
+        return false;
+
+    // Restore string order as its byte order is reversed
+    std::reverse(_os.begin(), _os.end());
+
     // Stop if the account is not found
     if (!result)
     {
@@ -798,7 +814,7 @@ bool AuthSocket::_HandleReconnectChallenge()
     pkt << (uint8)  CMD_AUTH_RECONNECT_CHALLENGE;
     pkt << (uint8)  0x00;
     _reconnectProof.SetRand(16 * 8);
-    pkt.append(_reconnectProof.AsByteArray(16),16);         // 16 bytes random
+    pkt.append(_reconnectProof.AsByteArray(16), 16);        // 16 bytes random
     pkt << (uint64) 0x00 << (uint64) 0x00;                  // 16 bytes zeros
     send((char const*)pkt.contents(), pkt.size());
     return true;
@@ -859,10 +875,10 @@ bool AuthSocket::_HandleRealmList()
     ///- Get the user id (else close the connection)
     // No SQL injection (escaped user name)
 
-    QueryResult* result = LoginDatabase.PQuery("SELECT id,sha_pass_hash FROM account WHERE username = '%s'",_safelogin.c_str());
+    QueryResult* result = LoginDatabase.PQuery("SELECT id,sha_pass_hash FROM account WHERE username = '%s'", _safelogin.c_str());
     if (!result)
     {
-        sLog.outError("[ERROR] user %s tried to login and we cannot find him in the database.",_login.c_str());
+        sLog.outError("[ERROR] user %s tried to login and we cannot find him in the database.", _login.c_str());
         close_connection();
         return false;
     }
@@ -926,7 +942,7 @@ void AuthSocket::LoadRealmlist(ByteBuffer& pkt, uint32 acctid)
                 if (realmflags & REALM_FLAG_SPECIFYBUILD)
                 {
                     char buf[20];
-                    snprintf(buf, 20," (%u,%u,%u)", buildInfo->major_version, buildInfo->minor_version, buildInfo->bugfix_version);
+                    snprintf(buf, 20, " (%u,%u,%u)", buildInfo->major_version, buildInfo->minor_version, buildInfo->bugfix_version);
                     name += buf;
                 }
 

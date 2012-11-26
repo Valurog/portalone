@@ -126,8 +126,8 @@ void WorldSession::HandleQuestgiverAcceptQuestOpcode(WorldPacket& recv_data)
 
     // no or incorrect quest giver
     if (!pObject
-            || (pObject->GetTypeId() != TYPEID_PLAYER && !pObject->HasQuest(quest))
-            || (pObject->GetTypeId() == TYPEID_PLAYER && !((Player*)pObject)->CanShareQuest(quest))
+        || (pObject->GetTypeId() != TYPEID_PLAYER && !pObject->HasQuest(quest))
+        || (pObject->GetTypeId() == TYPEID_PLAYER && !((Player*)pObject)->CanShareQuest(quest))
        )
     {
         _player->PlayerTalkClass->CloseGossip();
@@ -543,7 +543,7 @@ uint32 WorldSession::getDialogStatus(Player* pPlayer, Object* questgiver, uint32
         QuestStatus status = pPlayer->GetQuestStatus(quest_id);
 
         if ((status == QUEST_STATUS_COMPLETE && !pPlayer->GetQuestRewardStatus(quest_id)) ||
-                (pQuest->IsAutoComplete() && pPlayer->CanTakeQuest(pQuest, false)))
+            (pQuest->IsAutoComplete() && pPlayer->CanTakeQuest(pQuest, false)))
         {
             if (pQuest->IsAutoComplete() && pQuest->IsRepeatable())
                 dialogStatusNew = DIALOG_STATUS_REWARD_REP;

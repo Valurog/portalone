@@ -227,8 +227,8 @@ void WorldSession::HandleWhoOpcode(WorldPacket& recv_data)
             if (!str[i].empty())
             {
                 if (wgname.find(str[i]) != std::wstring::npos ||
-                        wpname.find(str[i]) != std::wstring::npos ||
-                        Utf8FitTo(aname, str[i]))
+                    wpname.find(str[i]) != std::wstring::npos ||
+                    Utf8FitTo(aname, str[i]))
                 {
                     s_show = true;
                     break;
@@ -269,9 +269,9 @@ void WorldSession::HandleLogoutRequestOpcode(WorldPacket & /*recv_data*/)
 
     // Can not logout if...
     if (GetPlayer()->isInCombat() ||                        //...is in combat
-            GetPlayer()->duel         ||                    //...is in Duel
-            //...is jumping ...is falling
-            GetPlayer()->m_movementInfo.HasMovementFlag(MovementFlags(MOVEFLAG_FALLING | MOVEFLAG_FALLINGFAR)))
+        GetPlayer()->duel         ||                    //...is in Duel
+        //...is jumping ...is falling
+        GetPlayer()->m_movementInfo.HasMovementFlag(MovementFlags(MOVEFLAG_FALLING | MOVEFLAG_FALLINGFAR)))
     {
         WorldPacket data(SMSG_LOGOUT_RESPONSE, (2 + 4)) ;
         data << (uint8)0xC;
@@ -284,7 +284,7 @@ void WorldSession::HandleLogoutRequestOpcode(WorldPacket & /*recv_data*/)
 
     // instant logout in taverns/cities or on taxi or for admins, gm's, mod's if its enabled in mangosd.conf
     if (GetPlayer()->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) || GetPlayer()->IsTaxiFlying() ||
-            GetSecurity() >= (AccountTypes)sWorld.getConfig(CONFIG_UINT32_INSTANT_LOGOUT))
+        GetSecurity() >= (AccountTypes)sWorld.getConfig(CONFIG_UINT32_INSTANT_LOGOUT))
     {
         LogoutPlayer(true);
         return;
@@ -405,12 +405,12 @@ void WorldSession::HandleSetSelectionOpcode(WorldPacket& recv_data)
     ObjectGuid guid;
     recv_data >> guid;
 
-    _player->SetSelectionGuid(guid);
-
     // update reputation list if need
     Unit* unit = ObjectAccessor::GetUnit(*_player, guid);   // can select group members at diff maps
     if (!unit)
         return;
+
+    _player->SetSelectionGuid(guid);
 
     if (FactionTemplateEntry const* factionTemplateEntry = sFactionTemplateStore.LookupEntry(unit->getFaction()))
         _player->GetReputationMgr().SetVisible(factionTemplateEntry);
@@ -736,14 +736,12 @@ void WorldSession::HandleAreaTriggerOpcode(WorldPacket& recv_data)
         return;
     }
 
-    if (pl->InBattleGround())
+    if (BattleGround* bg = pl->GetBattleGround())
     {
-        if (BattleGround* bg = pl->GetBattleGround())
-            bg->HandleAreaTrigger(pl, Trigger_ID);
+        bg->HandleAreaTrigger(pl, Trigger_ID);
         return;
     }
-
-    if (OutdoorPvP* outdoorPvP = sOutdoorPvPMgr.GetScript(pl->GetCachedZoneId()))
+    else if (OutdoorPvP* outdoorPvP = sOutdoorPvPMgr.GetScript(pl->GetCachedZoneId()))
     {
         if (outdoorPvP->HandleAreaTrigger(pl, Trigger_ID))
             return;
@@ -812,7 +810,7 @@ void WorldSession::HandleAreaTriggerOpcode(WorldPacket& recv_data)
         if (at->requiredItem)
         {
             if (!pl->HasItemCount(at->requiredItem, 1) &&
-                    (!at->requiredItem2 || !GetPlayer()->HasItemCount(at->requiredItem2, 1)))
+                (!at->requiredItem2 || !GetPlayer()->HasItemCount(at->requiredItem2, 1)))
                 missingItem = at->requiredItem;
         }
         else if (at->requiredItem2 && !GetPlayer()->HasItemCount(at->requiredItem2, 1))
@@ -826,7 +824,7 @@ void WorldSession::HandleAreaTriggerOpcode(WorldPacket& recv_data)
             if (at->heroicKey)
             {
                 if (!GetPlayer()->HasItemCount(at->heroicKey, 1) &&
-                        (!at->heroicKey2 || !GetPlayer()->HasItemCount(at->heroicKey2, 1)))
+                    (!at->heroicKey2 || !GetPlayer()->HasItemCount(at->heroicKey2, 1)))
                     missingKey = at->heroicKey;
             }
             else if (at->heroicKey2 && !GetPlayer()->HasItemCount(at->heroicKey2, 1))
@@ -845,7 +843,11 @@ void WorldSession::HandleAreaTriggerOpcode(WorldPacket& recv_data)
                 missingQuest = at->requiredQuest;
         }
 
-        if (missingLevel || missingItem || missingKey || missingQuest)
+        uint32 instanceStatus = 0;
+        if (at->status)
+            instanceStatus = at->status;
+
+        if (missingLevel || missingItem || missingKey || missingQuest || instanceStatus)
         {
             // TODO: all this is probably wrong
             if (missingItem)
@@ -856,6 +858,8 @@ void WorldSession::HandleAreaTriggerOpcode(WorldPacket& recv_data)
                 SendAreaTriggerMessage("%s", at->requiredFailedText.c_str());
             else if (missingLevel)
                 SendAreaTriggerMessage(GetMangosString(LANG_LEVEL_MINREQUIRED), missingLevel);
+            else if (instanceStatus)
+                SendAreaTriggerMessage("%s", at->statusFailedText.c_str());
             return;
         }
     }
@@ -1019,16 +1023,6 @@ void WorldSession::HandleSetActionBarTogglesOpcode(WorldPacket& recv_data)
     GetPlayer()->SetByteValue(PLAYER_FIELD_BYTES, 2, ActionBar);
 }
 
-void WorldSession::HandleWardenDataOpcode(WorldPacket& recv_data)
-{
-    recv_data.read_skip<uint8>();
-    /*
-        uint8 tmp;
-        recv_data >> tmp;
-        DEBUG_LOG("Received opcode CMSG_WARDEN_DATA, not resolve.uint8 = %u", tmp);
-    */
-}
-
 void WorldSession::HandlePlayedTime(WorldPacket& /*recv_data*/)
 {
     WorldPacket data(SMSG_PLAYED_TIME, 4 + 4);
@@ -1084,7 +1078,7 @@ void WorldSession::HandleInspectOpcode(WorldPacket& recv_data)
                 uint32 curtalent_maxrank = 0;
                 for (uint32 k = MAX_TALENT_RANK; k > 0; --k)
                 {
-                    if (talentInfo->RankID[k-1] && plr->HasSpell(talentInfo->RankID[k-1]))
+                    if (talentInfo->RankID[k - 1] && plr->HasSpell(talentInfo->RankID[k - 1]))
                     {
                         curtalent_maxrank = k;
                         break;
@@ -1474,4 +1468,60 @@ void WorldSession::HandleSetTaxiBenchmarkOpcode(WorldPacket& recv_data)
     recv_data >> mode;
 
     DEBUG_LOG("Client used \"/timetest %d\" command", mode);
+}
+
+// Refer-A-Friend
+void WorldSession::HandleGrantLevel(WorldPacket& recv_data)
+{
+    DEBUG_LOG("WORLD: CMSG_GRANT_LEVEL");
+
+    ObjectGuid guid;
+    recv_data >> guid.ReadAsPacked();
+
+    if (!guid.IsPlayer())
+        return;
+
+    Player * target = sObjectMgr.GetPlayer(guid);
+
+    // cheating and other check
+    ReferAFriendError err = _player->GetReferFriendError(target, false);
+
+    if (err)
+    {
+        _player->SendReferFriendError(err, target);
+        return;
+    }
+
+    target->AccessGrantableLevel(_player->GetObjectGuid());
+
+    WorldPacket data(SMSG_PROPOSE_LEVEL_GRANT, 8);
+    data << _player->GetPackGUID();
+    target->GetSession()->SendPacket(&data);
+}
+
+void WorldSession::HandleAcceptGrantLevel(WorldPacket& recv_data)
+{
+    DEBUG_LOG("WORLD: CMSG_ACCEPT_LEVEL_GRANT");
+
+    ObjectGuid guid;
+    recv_data >> guid.ReadAsPacked();
+
+    if (!guid.IsPlayer())
+        return;
+
+    if (!_player->IsAccessGrantableLevel(guid))
+        return;
+
+    _player->AccessGrantableLevel(ObjectGuid());
+    Player * grant_giver = sObjectMgr.GetPlayer(guid);
+
+    if (!grant_giver)
+        return;
+
+    if (grant_giver->GetGrantableLevels())
+        grant_giver->ChangeGrantableLevels(0);
+    else
+        return;
+
+    _player->GiveLevel(_player->getLevel() + 1);
 }

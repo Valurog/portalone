@@ -1,6 +1,6 @@
 #ifndef __REVISION_SQL_H__
 #define __REVISION_SQL_H__
- #define REVISION_DB_CHARACTERS "required_s1350_11716_09_characters_mail"
- #define REVISION_DB_MANGOS "required_s1667_12097_01_mangos_mangos_string"
- #define REVISION_DB_REALMD "required_10008_01_realmd_realmd_db_version"
+#define REVISION_DB_CHARACTERS "required_s1699_xxxxx_01_characters_characters"
+#define REVISION_DB_MANGOS "required_s1718_12113_01_mangos_spell_template"
+#define REVISION_DB_REALMD "required_s1706_xxxxx_01_realmd_warden_data_result"
 #endif // __REVISION_SQL_H__

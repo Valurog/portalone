@@ -243,7 +243,10 @@ void WorldSession::HandleMoveTeleportAckOpcode(WorldPacket& recv_data)
 void WorldSession::HandleMovementOpcodes(WorldPacket& recv_data)
 {
     uint32 opcode = recv_data.GetOpcode();
-    DEBUG_LOG("WORLD: Recvd %s (%u, 0x%X) opcode", LookupOpcodeName(opcode), opcode, opcode);
+    if (!sLog.HasLogFilter(LOG_FILTER_PLAYER_MOVES))
+    {
+        DEBUG_LOG("WORLD: Recvd %s (%u, 0x%X) opcode", LookupOpcodeName(opcode), opcode, opcode);
+    }
 
     Unit* mover = _player->GetMover();
     Player* plMover = mover->GetTypeId() == TYPEID_PLAYER ? (Player*)mover : NULL;
@@ -543,8 +546,7 @@ void WorldSession::HandleMoverRelocation(MovementInfo& movementInfo)
         if (movementInfo.GetPos()->z < -500.0f)
         {
             if (plMover->InBattleGround()
-                    && plMover->GetBattleGround()
-                    && plMover->GetBattleGround()->HandlePlayerUnderMap(_player))
+                && plMover->GetBattleGround()->HandlePlayerUnderMap(_player))
             {
                 // do nothing, the handle already did if returned true
             }

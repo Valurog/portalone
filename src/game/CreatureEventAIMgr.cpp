@@ -311,8 +311,9 @@ void CreatureEventAIMgr::LoadCreatureEventAI_Scripts()
             // Individual event checks
             switch (temp.event_type)
             {
-                case EVENT_T_TIMER:
+                case EVENT_T_TIMER_IN_COMBAT:
                 case EVENT_T_TIMER_OOC:
+                case EVENT_T_TIMER_GENERIC:
                     if (temp.timer.initialMax < temp.timer.initialMin)
                         sLog.outErrorDb("CreatureEventAI:  Creature %u are using timed event(%u) with param2 < param1 (InitialMax < InitialMin). Event will never repeat.", temp.creature_id, i);
                     if (temp.timer.repeatMax < temp.timer.repeatMin)
@@ -494,7 +495,7 @@ void CreatureEventAIMgr::LoadCreatureEventAI_Scripts()
 
             for (uint32 j = 0; j < MAX_ACTIONS; ++j)
             {
-                uint16 action_type = fields[10+(j*4)].GetUInt16();
+                uint16 action_type = fields[10 + (j * 4)].GetUInt16();
                 if (action_type >= ACTION_T_END)
                 {
                     sLog.outErrorDb("CreatureEventAI:  Event %u Action %u has incorrect action type (%u), replace by ACTION_T_NONE.", i, j + 1, action_type);
@@ -505,9 +506,9 @@ void CreatureEventAIMgr::LoadCreatureEventAI_Scripts()
                 CreatureEventAI_Action& action = temp.action[j];
 
                 action.type = EventAI_ActionType(action_type);
-                action.raw.param1 = fields[11+(j*4)].GetUInt32();
-                action.raw.param2 = fields[12+(j*4)].GetUInt32();
-                action.raw.param3 = fields[13+(j*4)].GetUInt32();
+                action.raw.param1 = fields[11 + (j * 4)].GetUInt32();
+                action.raw.param2 = fields[12 + (j * 4)].GetUInt32();
+                action.raw.param3 = fields[13 + (j * 4)].GetUInt32();
 
                 // Report any errors in actions
                 switch (action.type)
