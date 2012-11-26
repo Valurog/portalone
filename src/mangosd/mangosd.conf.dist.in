@@ -37,13 +37,13 @@ ConfVersion=2010100901
 #                    hostname;port;username;password;database
 #                    .;/path/to/unix_socket/DIRECTORY or . for default path;username;password;database - use Unix sockets at Unix/Linux
 #
-#	LoginDatabaseConnections
-#	WorldDatabaseConnections
-#	CharacterDatabaseConnections
-#		 Amount of connections to database which will be used for SELECT queries. Maximum 16 connections per database.
-#		 Please, note, for data consistency only one connection for each database is used for transactions and async SELECTs.
-#		 So formula to find out how many connections will be established: X = ¹_connections + 1
-#		 Default: 1 connection for SELECT statements
+#    LoginDatabaseConnections
+#    WorldDatabaseConnections
+#    CharacterDatabaseConnections
+#         Amount of connections to database which will be used for SELECT queries. Maximum 16 connections per database.
+#         Please, note, for data consistency only one connection for each database is used for transactions and async SELECTs.
+#         So formula to find out how many connections will be established: X = ¹_connections + 1
+#         Default: 1 connection for SELECT statements
 #
 #    MaxPingTime
 #        Settings for maximum database-ping interval (minutes between pings)
@@ -267,17 +267,17 @@ CleanCharacterDB = 1
 #
 #    LogFilter_TransportMoves
 #    LogFilter_CreatureMoves
+#    LogFilter_PlayerMoves
 #    LogFilter_VisibilityChanges
 #    LogFilter_Weather
 #    LogFilter_DbStrictedCheck
+#    LogFilter_SQLText
 #    LogFilter_Pathfinding
-#        Log filters (active by default)
+#        Log filters (active by default - meaning: the filter is active, hence the log is not displayed)
 #        Default: 1 - not include with any log level
 #                 0 - include in log if log level permit
 #
 #    LogFilter_PeriodicAffects
-#    LogFilter_PlayerMoves
-#    LogFilter_SQLText
 #    LogFilter_AIAndMovegens
 #    LogFilter_PlayerStats
 #    LogFilter_Damage
@@ -339,6 +339,11 @@ CleanCharacterDB = 1
 #        Default: "Ra.log"
 #                 "" - Empty name for disable
 #
+#    WardenLogFile
+#        Log file of Warden
+#        Default: ""           - no log file created
+#                 "warden.log" - recommended name to create a log file
+#
 #    LogColors
 #        Color for messages (format "normal_color details_color debug_color error_color")
 #        Colors: 0 - BLACK, 1 - RED, 2 - GREEN,  3 - BROWN, 4 - BLUE, 5 - MAGENTA, 6 -  CYAN, 7 - GREY,
@@ -362,8 +367,8 @@ LogFilter_Weather = 1
 LogFilter_DbStrictedCheck = 1
 LogFilter_Pathfinding = 1
 LogFilter_PeriodicAffects = 0
-LogFilter_PlayerMoves = 0
-LogFilter_SQLText = 0
+LogFilter_PlayerMoves = 1
+LogFilter_SQLText = 1
 LogFilter_AIAndMovegens = 0
 LogFilter_PlayerStats = 0
 LogFilter_Damage = 0
@@ -379,6 +384,7 @@ GmLogFile = ""
 GmLogTimestamp = 0
 GmLogPerAccount = 0
 RaLogFile = ""
+WardenLogFile = ""
 LogColors = ""
 
 ###################################################################################################################
@@ -1614,3 +1620,73 @@ SOAP.Port = 7878
 CharDelete.Method = 0
 CharDelete.MinLevel = 0
 CharDelete.KeepDays = 30
+
+###################################################################################################################
+# REFER-A-FRIEND SYSTEM
+#
+#    RAF.MaxGrantLevel
+#        Default: 60 - max level for granting level bonuses
+#
+#    RAF.MaxReferals
+#        Default: 5 - max referals for one account
+#
+#    RAF.MaxReferers
+#        Default: 5 - max referred accounts for one account
+#
+#    Rate.RAF.XP
+#        Default: 3 - XP bonus for referred friends in party
+#
+#    Rate.RAF.LevelPerLevel
+#        Default: 0.5 - bonus levels per referal level
+#
+###################################################################################################################
+
+RAF.MaxGrantLevel       = 60
+RAF.MaxReferals         = 5
+RAF.MaxReferers         = 5
+Rate.RAF.XP             = 3
+Rate.RAF.LevelPerLevel  = 0.5
+
+###################################################################################################################
+# WARDEN SYSTEM SETTINGS
+#
+#    Warden.Enabled
+#        Enable Enabled Warden System
+#        Default: 0 (Disabled)
+#                 1 (Enabled)
+#
+#    Warden.Kick.Ban
+#        Kick or ban player on failed check
+#        Default: 0 (Disabled)
+#                 1 (Kick)
+#                 2 (Ban)
+#
+#    Warden.BanLength
+#        Player ban length (in milliseconds)
+#        Default: 900000 - (15 min)
+#                 0      - Infinite ban
+#
+#    Warden.NumChecks
+#        Number of Warden checks that are sent to the client each cycle.
+#        Default:     3 - (Enabled)
+#                     0 - (Disabled)
+#
+#    Warden.ClientResponseDelay
+#        Time (in seconds) before client is getting disconnecting for not responding.
+#        Default:     90 - (90 Seconds)
+#                     0 - (Disabled, client won't be kicked)
+#
+#    Warden.ClientCheckHoldOff
+#        Time (in seconds) to wait before sending the next check request to the client.
+#                     A low number increases traffic and load on client and server side.
+#        Default:     15 - (15 Seconds)
+#                     0  - (Send check as soon as possible)
+#
+###################################################################################################################
+
+Warden.Enabled              = 0
+Warden.Kick.Ban             = 0
+Warden.BanLength            = 900000
+Warden.NumChecks            = 3
+Warden.ClientResponseDelay  = 90
+Warden.ClientCheckHoldOff   = 15

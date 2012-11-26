@@ -240,7 +240,7 @@ int WorldSocket::handle_input(ACE_HANDLE)
         case -1 :
         {
             if ((errno == EWOULDBLOCK) ||
-                    (errno == EAGAIN))
+                (errno == EAGAIN))
             {
                 return Update();                            // interesting line ,isn't it ?
             }
@@ -510,7 +510,7 @@ int WorldSocket::cancel_wakeup_output(GuardType& g)
     g.release();
 
     if (reactor()->cancel_wakeup
-            (this, ACE_Event_Handler::WRITE_MASK) == -1)
+        (this, ACE_Event_Handler::WRITE_MASK) == -1)
     {
         // would be good to store errno from reactor with errno guard
         sLog.outError("WorldSocket::cancel_wakeup_output");
@@ -530,7 +530,7 @@ int WorldSocket::schedule_wakeup_output(GuardType& g)
     g.release();
 
     if (reactor()->schedule_wakeup
-            (this, ACE_Event_Handler::WRITE_MASK) == -1)
+        (this, ACE_Event_Handler::WRITE_MASK) == -1)
     {
         sLog.outError("WorldSocket::schedule_wakeup_output");
         return -1;
@@ -678,7 +678,8 @@ int WorldSocket::HandleAuthSession(WorldPacket& recvPacket)
                              "s, "                       //6
                              "expansion, "               //7
                              "mutetime, "                //8
-                             "locale "                   //9
+                             "locale, "                  //9
+                             "os "                       //10
                              "FROM account "
                              "WHERE username = '%s'",
                              safe_account.c_str());
@@ -742,6 +743,8 @@ int WorldSocket::HandleAuthSession(WorldPacket& recvPacket)
     locale = LocaleConstant(fields[9].GetUInt8());
     if (locale >= MAX_LOCALE)
         locale = LOCALE_enUS;
+
+    std::string os = fields[10].GetString();
 
     delete result;
 
@@ -821,6 +824,7 @@ int WorldSocket::HandleAuthSession(WorldPacket& recvPacket)
     m_Crypt.Init(&K);
 
     m_Session->LoadTutorialsData();
+    m_Session->InitWarden(&K, os);
 
     // In case needed sometime the second arg is in microseconds 1 000 000 = 1 sec
     ACE_OS::sleep(ACE_Time_Value(0, 10000));
