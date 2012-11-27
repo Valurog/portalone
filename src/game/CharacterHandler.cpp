@@ -128,6 +128,7 @@ public:
             delete holder;
             return;
         }
+        session->HandlePlayerLogin((LoginQueryHolder*)holder);
     }
     // Playerbot mod: is different from the normal HandlePlayerLoginCallback in that it
     // sets up the bot's world session and also stores the pointer to the bot player in the master's
